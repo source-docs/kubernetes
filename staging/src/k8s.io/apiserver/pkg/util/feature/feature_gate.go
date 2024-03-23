@@ -29,5 +29,6 @@ var (
 
 	// DefaultFeatureGate is a shared global FeatureGate.
 	// Top-level commands/options setup that needs to modify this feature gate should use DefaultMutableFeatureGate.
+	// 当前版本的特征，在 pkg/features/kube_features.go:895  defaultKubernetesFeatureGates 变量添加，
 	DefaultFeatureGate featuregate.FeatureGate = DefaultMutableFeatureGate
 )

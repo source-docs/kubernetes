@@ -127,6 +127,7 @@ type KubeProxyConfiguration struct {
 	metav1.TypeMeta
 
 	// featureGates is a map of feature names to bools that enable or disable alpha/experimental features.
+	// 特性门控，启用或者禁用的 features
 	FeatureGates map[string]bool
 
 	// bindAddress is the IP address for the proxy server to serve on (set to 0.0.0.0

@@ -90,6 +90,7 @@ func NewPathRecorderMux(name string) *PathRecorderMux {
 		pathStacks:      map[string]string{},
 	}
 
+	// 默认使用 http 包自带的 404 处理器
 	ret.mux.Store(&pathHandler{notFoundHandler: http.NotFoundHandler()})
 	return ret
 }

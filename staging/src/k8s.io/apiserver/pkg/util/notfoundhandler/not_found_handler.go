@@ -44,7 +44,10 @@ type Handler struct {
 }
 
 func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	// 实际实现在 vendor/k8s.io/apiserver/pkg/endpoints/filters/mux_discovery_complete.go:33
+	// NoMuxAndDiscoveryIncompleteKey 判断 ctx 里面是否包含 muxAndDiscoveryIncompleteKey，返回 true 表示不包含
 	if !h.isMuxAndDiscoveryCompleteFn(req.Context()) {
+		// 在初始化完成之前，收到请求，返回 503，而不是  404
 		errMsg := "the request has been made before all known HTTP paths have been installed, please try again"
 		err := apierrors.NewServiceUnavailable(errMsg)
 		if err.ErrStatus.Details == nil {

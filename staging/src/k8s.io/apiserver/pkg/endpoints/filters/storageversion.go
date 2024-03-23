@@ -41,6 +41,13 @@ import (
 // 4. create requests to the namespace API sent by apiserver itself,
 // 5. write requests to the lease API in kube-system namespace,
 // 6. resources whose StorageVersion is not pending update, including non-persisted resources.
+// 在对资源对象进行操作之前检查其存储版本，如果版本不匹配，只放行下面几种请求。
+// 1. 非资源类请求
+// 2. 读请求
+// 3. 操作 storageversion API
+// 4. api server 发的，对于 namespace 的创建请求
+// 5. 往 kube-system 写租约相关的 API
+// 6. 存储版本已经是最新或者不需要更新的资源对象，比如非持久化资源，如
 func WithStorageVersionPrecondition(handler http.Handler, svm storageversion.Manager, s runtime.NegotiatedSerializer) http.Handler {
 	if svm == nil {
 		// TODO(roycaihw): switch to warning after the feature graduate to beta/GA
@@ -49,6 +56,7 @@ func WithStorageVersionPrecondition(handler http.Handler, svm storageversion.Man
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if svm.Completed() {
+			// 如果匹配，放行
 			handler.ServeHTTP(w, req)
 			return
 		}
@@ -59,16 +67,19 @@ func WithStorageVersionPrecondition(handler http.Handler, svm storageversion.Man
 			return
 		}
 		// Allow non-resource requests
+		// 非资源类请求,放行
 		if !requestInfo.IsResourceRequest {
 			handler.ServeHTTP(w, req)
 			return
 		}
 		// Allow read requests
+		// 读请求，放行
 		if requestInfo.Verb == "get" || requestInfo.Verb == "list" || requestInfo.Verb == "watch" {
 			handler.ServeHTTP(w, req)
 			return
 		}
 		// Allow writes to the storage version API
+		// 操作 storageversion API， 放行
 		if requestInfo.APIGroup == "internal.apiserver.k8s.io" && requestInfo.Resource == "storageversions" {
 			handler.ServeHTTP(w, req)
 			return
@@ -83,6 +94,7 @@ func WithStorageVersionPrecondition(handler http.Handler, svm storageversion.Man
 		// or if an upgraded server that joins an existing cluster has new system namespaces (other
 		// than kube-system, kube-public, kube-node-lease) that need to be created.
 		u, hasUser := request.UserFrom(ctx)
+		// 判断是 api server 发的，对于 namespace 的创建请求，放行
 		if requestInfo.APIGroup == "" && requestInfo.Resource == "namespaces" &&
 			requestInfo.Verb == "create" && hasUser &&
 			u.GetName() == user.APIServerUser && contains(u.GetGroups(), user.SystemPrivilegedGroup) {
@@ -93,6 +105,7 @@ func WithStorageVersionPrecondition(handler http.Handler, svm storageversion.Man
 		// apiserver-identity leases to operate. Leases in kube-system are either apiserver-identity
 		// lease (which gets garbage collected when stale) or leader-election leases (which gets
 		// periodically updated by system components). Both types of leases won't be stale in etcd.
+		// 往 kube-system 写租约相关的 API, 放行
 		if requestInfo.APIGroup == "coordination.k8s.io" && requestInfo.Resource == "leases" &&
 			requestInfo.Namespace == metav1.NamespaceSystem {
 			handler.ServeHTTP(w, req)
@@ -100,6 +113,7 @@ func WithStorageVersionPrecondition(handler http.Handler, svm storageversion.Man
 		}
 		// If the resource's StorageVersion is not in the to-be-updated list, let it pass.
 		// Non-persisted resources are not in the to-be-updated list, so they will pass.
+		// 存储版本已经是最新或者不需要更新的资源对象，对这些资源对象的写操作可以被放行，不受存储版本屏障的限制。
 		gr := schema.GroupResource{requestInfo.APIGroup, requestInfo.Resource}
 		if !svm.PendingUpdate(gr) {
 			handler.ServeHTTP(w, req)

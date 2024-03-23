@@ -312,6 +312,7 @@ func NewEmptyDelegate() DelegationTarget {
 }
 
 // NewEmptyDelegateWithCustomHandler allows for registering a custom handler usually for special handling of 404 requests
+// 注册一个用户自定义处理 DelegationTarget
 func NewEmptyDelegateWithCustomHandler(handler http.Handler) DelegationTarget {
 	return emptyDelegate{handler}
 }

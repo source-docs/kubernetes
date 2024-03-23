@@ -30,6 +30,7 @@ const (
 
 // NoMuxAndDiscoveryIncompleteKey checks if the context contains muxAndDiscoveryIncompleteKey.
 // The presence of the key indicates the request has been made when the HTTP paths weren't installed.
+// 判断 ctx 里面是否包含 muxAndDiscoveryIncompleteKey，返回 true 表示不包含
 func NoMuxAndDiscoveryIncompleteKey(ctx context.Context) bool {
 	muxAndDiscoveryCompleteProtectionKeyValue, _ := ctx.Value(muxAndDiscoveryIncompleteKey).(string)
 	return len(muxAndDiscoveryCompleteProtectionKeyValue) == 0
@@ -47,6 +48,7 @@ func NoMuxAndDiscoveryIncompleteKey(ctx context.Context) bool {
 func WithMuxAndDiscoveryComplete(handler http.Handler, muxAndDiscoveryCompleteSignal <-chan struct{}) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if muxAndDiscoveryCompleteSignal != nil && !isClosed(muxAndDiscoveryCompleteSignal) {
+			// 初始化未完成，ctx 里面加一个 muxAndDiscoveryIncompleteKey 值
 			req = req.WithContext(context.WithValue(req.Context(), muxAndDiscoveryIncompleteKey, "MuxAndDiscoveryInstallationNotComplete"))
 		}
 		handler.ServeHTTP(w, req)
