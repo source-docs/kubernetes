@@ -73,6 +73,7 @@ func WithRetryAfter(handler http.Handler, shutdownDelayDurationElapsedCh <-chan 
 	return withRetryAfter(handler, isRequestExemptFromRetryAfter, func() (*retryAfterParams, bool) {
 		select {
 		case <-shutdownDelayDurationElapsedCh:
+			// api server 在关闭中
 			return shutdownRetryAfterParams, true
 		default:
 			return nil, false
@@ -84,6 +85,7 @@ func withRetryAfter(handler http.Handler, isRequestExemptFn isRequestExemptFunc,
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		params, send := shouldRespondWithRetryAfterFn()
 		if !send || isRequestExemptFn(req) {
+			// 如果服务器没在关闭，或者是这个请求豁免重试，直接放行
 			handler.ServeHTTP(w, req)
 			return
 		}
@@ -95,10 +97,12 @@ func withRetryAfter(handler http.Handler, isRequestExemptFn isRequestExemptFunc,
 		// but respect "Connection" == "close" to mean sending a GOAWAY and tearing
 		// down the TCP connection when idle, like we do for HTTP/1.
 		if params.TearDownConnection {
+			// 关闭连接
 			w.Header().Set("Connection", "close")
 		}
 
 		// Return a 429 status asking the client to try again after 5 seconds
+		// 返回 429， 并且告诉客户端 5s 后重试
 		w.Header().Set("Retry-After", "5")
 		http.Error(w, params.Message, http.StatusTooManyRequests)
 	})

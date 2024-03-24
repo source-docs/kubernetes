@@ -42,6 +42,7 @@ import (
 type APIServerHandler struct {
 	// FullHandlerChain is the one that is eventually served with.  It should include the full filter
 	// chain and then call the Director.
+	// 中间件处理链
 	FullHandlerChain http.Handler
 	// The registered APIs.  InstallAPIs uses this.  Other servers probably shouldn't access this directly.
 	GoRestfulContainer *restful.Container

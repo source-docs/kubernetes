@@ -63,6 +63,7 @@ type goaway struct {
 }
 
 // ServeHTTP implement HTTP handler
+// 发送超时报文，在空闲的时候端口 TCP 连接
 func (h *goaway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Proto == "HTTP/2.0" && h.decider.Goaway(r) {
 		// Send a GOAWAY and tear down the TCP connection when idle.
@@ -73,6 +74,7 @@ func (h *goaway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // probabilisticGoawayDecider send GOAWAY probabilistically according to chance
+// 决定是否触发 GoWay, 断开 HTTP2 连接
 type probabilisticGoawayDecider struct {
 	chance float64
 	next   func() float64

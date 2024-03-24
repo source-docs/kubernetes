@@ -26,6 +26,8 @@ func WithCacheControl(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// Set the cache-control header if it is not already set
 		if _, ok := w.Header()["Cache-Control"]; !ok {
+			// 设置"no-cache"，表示不允许缓存响应
+			// 设置"private"表示响应只能被单个用户缓存，不能被共享缓存（如代理服务器）缓存。
 			w.Header().Set("Cache-Control", "no-cache, private")
 		}
 		handler.ServeHTTP(w, req)

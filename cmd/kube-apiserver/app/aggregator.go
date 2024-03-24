@@ -74,6 +74,8 @@ func createAggregatorConfig(
 		// Add StorageVersionPrecondition handler to aggregator-apiserver.
 		// The handler will block write requests to built-in resources until the
 		// target resources' storage versions are up-to-date.
+		// 如果开启了 StorageVersionAPI 和 APIServerIdentity 特性，
+		// 会额外在  DefaultBuildHandlerChain 的基础上加一个 StorageVersionPrecondition 中间件
 		genericConfig.BuildHandlerChainFunc = genericapiserver.BuildHandlerChainWithStorageVersionPrecondition
 	}
 

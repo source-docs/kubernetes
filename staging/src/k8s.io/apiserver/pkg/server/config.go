@@ -216,6 +216,7 @@ type Config struct {
 	// GOAWAY, the in-flight requests will not be affected and new requests will use
 	// a new TCP connection to triggering re-balancing to another server behind the load balance.
 	// Default to 0, means never send GOAWAY. Max is 0.02 to prevent break the apiserver.
+	// 在 http2 中，表示触发 GoWay 断开请求的概率，默认值为 0
 	GoawayChance float64
 
 	// MergedResourceConfig indicates which groupVersion enabled and its resources enabled/disabled.
@@ -605,6 +606,7 @@ func (c completedConfig) New(name string, delegationTarget DelegationTarget) (*G
 	handlerChainBuilder := func(handler http.Handler) http.Handler {
 		// 实际实现在 BuildHandlerChainWithStorageVersionPrecondition
 		// vendor/k8s.io/apiserver/pkg/server/config.go:786
+		// 构建 api server 的处理中间件 链
 		return c.BuildHandlerChainFunc(handler, c.Config)
 	}
 
@@ -785,7 +787,7 @@ func (c completedConfig) New(name string, delegationTarget DelegationTarget) (*G
 	return s, nil
 }
 
-// 构建 apiserver 的处理链
+// 构建 apiserver 的处理链, 带 StorageVersionPrecondition 的
 func BuildHandlerChainWithStorageVersionPrecondition(apiHandler http.Handler, c *Config) http.Handler {
 	// WithStorageVersionPrecondition needs the WithRequestInfo to run first
 	// 存储版本检查拦截
@@ -793,6 +795,7 @@ func BuildHandlerChainWithStorageVersionPrecondition(apiHandler http.Handler, c 
 	return DefaultBuildHandlerChain(handler, c)
 }
 
+// 默认的 apiserver 的处理链, 不带 StorageVersionPrecondition 的
 func DefaultBuildHandlerChain(apiHandler http.Handler, c *Config) http.Handler {
 	handler := filterlatency.TrackCompleted(apiHandler)
 	// RBAC 鉴权中间件
@@ -845,26 +848,40 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *Config) http.Handler {
 
 	// 每个处理中的非长时间请求，会添加到 wg 里面，关机的时候会等待处理完成
 	handler = genericfilters.WithWaitGroup(handler, c.LongRunningFunc, c.HandlerChainWaitGroup)
+
+	// HTTP2 场景下，概率触发 GoWay，这样客户端会重新负载均衡后建立新 TCP 连接
 	if c.SecureServing != nil && !c.SecureServing.DisableHTTP2 && c.GoawayChance > 0 {
 		handler = genericfilters.WithProbabilisticGoaway(handler, c.GoawayChance)
 	}
+	// 添加审计注解
 	handler = genericapifilters.WithAuditAnnotations(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator)
+	// 警告记录器
 	handler = genericapifilters.WithWarningRecorder(handler)
+	// 缓存控制头添加 防止缓存响应，确保每次请求都会从服务器获取最新的数据
 	handler = genericapifilters.WithCacheControl(handler)
+	// 开启 HSTS，强制将转换为 HTTPS
 	handler = genericfilters.WithHSTS(handler, c.HSTSDirectives)
 	if c.ShutdownSendRetryAfter {
+		// api server 关闭过程中，接收到普通请求会返回 429，关闭连接，并且要求 5 s 后重试
 		handler = genericfilters.WithRetryAfter(handler, c.lifecycleSignals.AfterShutdownDelayDuration.Signaled())
 	}
+	// 请求日志
 	handler = genericfilters.WithHTTPLogging(handler)
 	if utilfeature.DefaultFeatureGate.Enabled(genericfeatures.APIServerTracing) {
+		// 如果开启了 tracing 特性，会
 		handler = genericapifilters.WithTracing(handler, c.TracerProvider)
 	}
+	// 延迟追踪
 	handler = genericapifilters.WithLatencyTrackers(handler)
+	// 在 ctx 里面追加 RequestInfo
 	handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
+	// 在 ctx 里面追加 ReceivedTimestamp
 	handler = genericapifilters.WithRequestReceivedTimestamp(handler)
 	// 如果初始化没完成，就接收到请求，做一个标记
 	handler = genericapifilters.WithMuxAndDiscoveryComplete(handler, c.lifecycleSignals.MuxAndDiscoveryComplete.Signaled())
+	// panic 恢复
 	handler = genericfilters.WithPanicRecovery(handler, c.RequestInfoResolver)
+	// 为 ctx 和 resp 生成一个 Audit-ID 审计 id
 	handler = genericapifilters.WithAuditID(handler)
 	return handler
 }
