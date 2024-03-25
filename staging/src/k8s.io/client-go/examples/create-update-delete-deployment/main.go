@@ -46,23 +46,46 @@ import (
 func main() {
 	var kubeconfig *string
 	if home := homedir.HomeDir(); home != "" {
+		// 从命令行参数里面解析 kubeconfig 的配置文件地址，默认情况下使用 ${HOME}/.kube/config
 		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
 	} else {
+		// 没有解析到 home, 只能通过绝对路径解析
 		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	}
 	flag.Parse()
 
+	//  文件内容示例
+	// apiVersion: v1
+	// clusters:
+	// - cluster:
+	//     server: http://<kube-master-ip>:8080
+	//   name: k8s
+	// contexts:
+	// - context:
+	//     cluster: k8s
+	//     namespace: default
+	//     user: ""
+	//   name: default
+	// current-context: default
+	// kind: Config
+	// preferences: {}
+	// users: []
+
+	// 通过配置文件创建 config 对象
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
 		panic(err)
 	}
+	// 通过 config 创建 Clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err)
 	}
 
+	// 创建一个 Deployments 客户端
 	deploymentsClient := clientset.AppsV1().Deployments(apiv1.NamespaceDefault)
 
+	// 创建一个 Deployment，包含两个 nginx:1.12  pod 副本
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "demo-deployment",
@@ -101,6 +124,7 @@ func main() {
 
 	// Create Deployment
 	fmt.Println("Creating deployment...")
+	// 创建 Deployment
 	result, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err != nil {
 		panic(err)
@@ -131,6 +155,7 @@ func main() {
 			panic(fmt.Errorf("Failed to get latest version of Deployment: %v", getErr))
 		}
 
+		// 设置副本数和升级镜像为 nginx:1.13
 		result.Spec.Replicas = int32Ptr(1)                           // reduce replica count
 		result.Spec.Template.Spec.Containers[0].Image = "nginx:1.13" // change nginx version
 		_, updateErr := deploymentsClient.Update(context.TODO(), result, metav1.UpdateOptions{})
@@ -144,10 +169,12 @@ func main() {
 	// List Deployments
 	prompt()
 	fmt.Printf("Listing deployments in namespace %q:\n", apiv1.NamespaceDefault)
+	// 或者 deployment 的列表
 	list, err := deploymentsClient.List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
+	// 遍历输出 Deployment 列表
 	for _, d := range list.Items {
 		fmt.Printf(" * %s (%d replicas)\n", d.Name, *d.Spec.Replicas)
 	}
@@ -155,6 +182,7 @@ func main() {
 	// Delete Deployment
 	prompt()
 	fmt.Println("Deleting deployment...")
+	// 前台删除关联资源
 	deletePolicy := metav1.DeletePropagationForeground
 	if err := deploymentsClient.Delete(context.TODO(), "demo-deployment", metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,

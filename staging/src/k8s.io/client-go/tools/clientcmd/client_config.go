@@ -612,14 +612,19 @@ func (config *inClusterClientConfig) Possible() bool {
 // components. Warnings should reflect this usage. If neither masterUrl or kubeconfigPath
 // are passed in we fallback to inClusterConfig. If inClusterConfig fails, we fallback
 // to the default config.
+// BuildConfigFromFlags 可以通过 masterUrl 或者 kubeconfig 文件路径来创建 *restclient.Config 对象
 func BuildConfigFromFlags(masterUrl, kubeconfigPath string) (*restclient.Config, error) {
 	if kubeconfigPath == "" && masterUrl == "" {
+		// kubeconfigPath 和 masterUrl 都没有指定，使用 inClusterConfig
 		klog.Warning("Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work.")
+		// 尝试从环境变量或者 /var/run/secrets/kubernetes.io/serviceaccount/token 里面获取配置
 		kubeconfig, err := restclient.InClusterConfig()
 		if err == nil {
+			// 找到集群内配置
 			return kubeconfig, nil
 		}
 		klog.Warning("error creating inClusterConfig, falling back to default config: ", err)
+		// 使用默认设置
 	}
 	return NewNonInteractiveDeferredLoadingClientConfig(
 		&ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},

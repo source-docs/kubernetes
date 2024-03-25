@@ -447,16 +447,20 @@ type GetOptions struct {
 type DeletionPropagation string
 
 const (
-	// Orphans the dependents.
+	// DeletePropagationOrphan Orphans the dependents.
+	// 删除一个对象时不会影响其依赖对象
 	DeletePropagationOrphan DeletionPropagation = "Orphan"
-	// Deletes the object from the key-value store, the garbage collector will
+	// DeletePropagationBackground Deletes the object from the key-value store, the garbage collector will
 	// delete the dependents in the background.
+	// 删除一个对象时，键值存储中的对象会被删除，而依赖对象会在后台由垃圾回收器进行删除。
 	DeletePropagationBackground DeletionPropagation = "Background"
-	// The object exists in the key-value store until the garbage collector
+	// DeletePropagationForeground The object exists in the key-value store until the garbage collector
 	// deletes all the dependents whose ownerReference.blockOwnerDeletion=true
 	// from the key-value store.  API sever will put the "foregroundDeletion"
 	// finalizer on the object, and sets its deletionTimestamp.  This policy is
 	// cascading, i.e., the dependents will be deleted with Foreground.
+	// 删除一个对象时，API server 会将 "foregroundDeletion" 终结器（finalizer）放在对象上，并设置其删除时间戳。
+	// 该策略是级联的，即依赖对象也会使用前台传播策略进行删除。
 	DeletePropagationForeground DeletionPropagation = "Foreground"
 )
 
@@ -526,7 +530,9 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // CreateOptions may be provided when creating an API object.
+// 创建时的一些选项
 type CreateOptions struct {
+	// 对象的类型元数据
 	TypeMeta `json:",inline"`
 
 	// When present, indicates that modifications should not be
@@ -535,6 +541,7 @@ type CreateOptions struct {
 	// request. Valid values are:
 	// - All: all dry run stages will be processed
 	// +optional
+	// 指定模拟操作
 	DryRun []string `json:"dryRun,omitempty" protobuf:"bytes,1,rep,name=dryRun"`
 	// +k8s:deprecated=includeUninitialized,protobuf=2
 
@@ -543,6 +550,7 @@ type CreateOptions struct {
 	// 128 characters long, and only contain printable characters,
 	// as defined by https://golang.org/pkg/unicode/#IsPrint.
 	// +optional
+	// 指定进行修改的操作者或实体的名称
 	FieldManager string `json:"fieldManager,omitempty" protobuf:"bytes,3,name=fieldManager"`
 
 	// fieldValidation instructs the server on how to handle
@@ -565,6 +573,10 @@ type CreateOptions struct {
 	// duplicate fields are present. The error returned from the server
 	// will contain all unknown and duplicate fields encountered.
 	// +optional
+	// 服务器在处理包含未知或重复字段的请求对象时的行为
+	// Ignore: 忽略多余字段
+	// Warn: 未知字段只打警告日志，重复保留最后一个
+	// Strict: 对象中存在未知字段或重复字段，则请求将失败，并返回 BadRequest 错误
 	FieldValidation string `json:"fieldValidation,omitempty" protobuf:"bytes,4,name=fieldValidation"`
 }
 

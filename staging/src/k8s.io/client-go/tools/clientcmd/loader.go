@@ -111,6 +111,7 @@ func (g *ClientConfigGetter) IsDefaultConfig(config *restclient.Config) bool {
 // EnvVarPathFiles if set (a list of files if set) OR the HomeDirectoryPath
 // ExplicitPath is special, because if a user specifically requests a certain file be used and error is reported if this file is not present
 type ClientConfigLoadingRules struct {
+	// kube config 的路径
 	ExplicitPath string
 	Precedence   []string
 

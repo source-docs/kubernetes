@@ -28,6 +28,7 @@ import (
 // 2. if none of those locations contain a `.kube\config` file, the first of %HOME%, %USERPROFILE%, %HOMEDRIVE%%HOMEPATH% that exists and is writeable is returned.
 // 3. if none of those locations are writeable, the first of %HOME%, %USERPROFILE%, %HOMEDRIVE%%HOMEPATH% that exists is returned.
 // 4. if none of those locations exists, the first of %HOME%, %USERPROFILE%, %HOMEDRIVE%%HOMEPATH% that is set is returned.
+// 当前用户的主目录
 func HomeDir() string {
 	if runtime.GOOS == "windows" {
 		home := os.Getenv("HOME")

@@ -123,6 +123,7 @@ type Interface interface {
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
+// 包含多个客户端的结构体，用于管理不同 API 组的客户端
 type Clientset struct {
 	*discovery.DiscoveryClient
 	admissionregistrationV1      *admissionregistrationv1.AdmissionregistrationV1Client
