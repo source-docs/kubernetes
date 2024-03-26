@@ -36,11 +36,13 @@ func HTTPClientFor(config *Config) (*http.Client, error) {
 	}
 	var httpClient *http.Client
 	if transport != http.DefaultTransport || config.Timeout > 0 {
+		// 如果 transport 不是默认的，或者配置设置了超时时间
 		httpClient = &http.Client{
 			Transport: transport,
 			Timeout:   config.Timeout,
 		}
 	} else {
+		// 如果没有超时时间，并且transport 是默认的，直接使用默认 http client
 		httpClient = http.DefaultClient
 	}
 
@@ -60,6 +62,7 @@ func TLSConfigFor(config *Config) (*tls.Config, error) {
 // TransportFor returns an http.RoundTripper that will provide the authentication
 // or transport level security defined by the provided Config. Will return the
 // default http.DefaultTransport if no special case behavior is needed.
+// 根据 配置 创建一个 RoundTripper
 func TransportFor(config *Config) (http.RoundTripper, error) {
 	cfg, err := config.TransportConfig()
 	if err != nil {
@@ -81,6 +84,7 @@ func HTTPWrappersForConfig(config *Config, rt http.RoundTripper) (http.RoundTrip
 }
 
 // TransportConfig converts a client config to an appropriate transport config.
+// 将 Config 的配置信息，转换为 transport.Config
 func (c *Config) TransportConfig() (*transport.Config, error) {
 	conf := &transport.Config{
 		UserAgent:          c.UserAgent,

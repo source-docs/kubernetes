@@ -85,6 +85,7 @@ func (n *clientNegotiator) StreamDecoder(contentType string, params map[string]s
 // NewClientNegotiator will attempt to retrieve the appropriate encoder, decoder, or
 // stream decoder for a given content type. Does not perform any conversion, but will
 // encode the object to the desired group, version, and kind. Use when creating a client.
+// clientNegotiator 负责编码、解码或流解码
 func NewClientNegotiator(serializer NegotiatedSerializer, gv schema.GroupVersion) ClientNegotiator {
 	return &clientNegotiator{
 		serializer: serializer,

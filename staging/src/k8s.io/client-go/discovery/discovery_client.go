@@ -130,14 +130,18 @@ type OpenAPIV3SchemaInterface interface {
 
 // DiscoveryClient implements the functions that discover server-supported API groups,
 // versions and resources.
+// 用于在 api-server 中发现支持的资源。
 type DiscoveryClient struct {
 	restClient restclient.Interface
 
+	// 遗留的前缀
+	// 基本是 /api
 	LegacyPrefix string
 }
 
 // Convert metav1.APIVersions to metav1.APIGroup. APIVersions is used by legacy v1, so
 // group would be "".
+// 版本列表转 APIGroup 对象
 func apiVersionsToAPIGroup(apiVersions *metav1.APIVersions) (apiGroup metav1.APIGroup) {
 	groupVersions := []metav1.GroupVersionForDiscovery{}
 	for _, version := range apiVersions.Versions {
@@ -158,28 +162,34 @@ func apiVersionsToAPIGroup(apiVersions *metav1.APIVersions) (apiGroup metav1.API
 func (d *DiscoveryClient) ServerGroups() (apiGroupList *metav1.APIGroupList, err error) {
 	// Get the groupVersions exposed at /api
 	v := &metav1.APIVersions{}
+	// 请求  /api 路径，获取版本列表
 	err = d.restClient.Get().AbsPath(d.LegacyPrefix).Do(context.TODO()).Into(v)
 	apiGroup := metav1.APIGroup{}
 	if err == nil && len(v.Versions) != 0 {
 		apiGroup = apiVersionsToAPIGroup(v)
 	}
 	if err != nil && !errors.IsNotFound(err) && !errors.IsForbidden(err) {
+		// 如果出错，但是不是因为找不到或者鉴权问题，直接返回错误
 		return nil, err
 	}
 
 	// Get the groupVersions exposed at /apis
 	apiGroupList = &metav1.APIGroupList{}
+	// 尝试从 /apis 查询
 	err = d.restClient.Get().AbsPath("/apis").Do(context.TODO()).Into(apiGroupList)
 	if err != nil && !errors.IsNotFound(err) && !errors.IsForbidden(err) {
+		// 如果出错，但是不是因为找不到或者鉴权问题，直接返回错误
 		return nil, err
 	}
 	// to be compatible with a v1.0 server, if it's a 403 or 404, ignore and return whatever we got from /api
 	if err != nil && (errors.IsNotFound(err) || errors.IsForbidden(err)) {
+		// 如果是 403 或者 404，忽略返回的内容
 		apiGroupList = &metav1.APIGroupList{}
 	}
 
 	// prepend the group retrieved from /api to the list if not empty
 	if len(v.Versions) != 0 {
+		// 如果 /api 接口返回了 gv, 合并一下
 		apiGroupList.Groups = append([]metav1.APIGroup{apiGroup}, apiGroupList.Groups...)
 	}
 	return apiGroupList, nil
@@ -490,6 +500,7 @@ func NewDiscoveryClientForConfig(c *restclient.Config) (*DiscoveryClient, error)
 // NewDiscoveryClientForConfigAndClient creates a new DiscoveryClient for the given config. This client
 // can be used to discover supported resources in the API server.
 // Note the http client provided takes precedence over the configured transport values.
+// 用于在 api-server 中发现支持的资源。
 func NewDiscoveryClientForConfigAndClient(c *restclient.Config, httpClient *http.Client) (*DiscoveryClient, error) {
 	config := *c
 	if err := setDiscoveryDefaults(&config); err != nil {

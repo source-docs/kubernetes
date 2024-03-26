@@ -27,6 +27,9 @@ import (
 // DefaultServerURL converts a host, host:port, or URL string to the default base server API path
 // to use with a Client at a given API version following the standard conventions for a
 // Kubernetes API.
+// 示例
+// host: https://10.0.2.0:6443
+// apiPath: /apis
 func DefaultServerURL(host, apiPath string, groupVersion schema.GroupVersion, defaultTLS bool) (*url.URL, string, error) {
 	if host == "" {
 		return nil, "", fmt.Errorf("host must be a URL or a host:port pair")
@@ -56,13 +59,15 @@ func DefaultServerURL(host, apiPath string, groupVersion schema.GroupVersion, de
 	// hostURL.Path should be blank.
 	//
 	// versionedAPIPath, a path relative to baseURL.Path, points to a versioned API base
+	// 拼接 apis group version , 如： /apis/admissionregistration.k8s.io/v1
 	versionedAPIPath := DefaultVersionedAPIPath(apiPath, groupVersion)
 
 	return hostURL, versionedAPIPath, nil
 }
 
-// DefaultVersionedAPIPathFor constructs the default path for the given group version, assuming the given
+// DefaultVersionedAPIPath constructs the default path for the given group version, assuming the given
 // API path, following the standard conventions of the Kubernetes API.
+// 根据给定的组版本和API路径构建默认路径
 func DefaultVersionedAPIPath(apiPath string, groupVersion schema.GroupVersion) string {
 	versionedAPIPath := path.Join("/", apiPath)
 
@@ -79,6 +84,7 @@ func DefaultVersionedAPIPath(apiPath string, groupVersion schema.GroupVersion) s
 
 // defaultServerUrlFor is shared between IsConfigTransportTLS and RESTClientFor. It
 // requires Host and Version to be set prior to being called.
+// 根据配置生成返回的 url
 func defaultServerUrlFor(config *Config) (*url.URL, string, error) {
 	// TODO: move the default to secure when the apiserver supports TLS by default
 	// config.Insecure is taken to mean "I want HTTPS but don't bother checking the certs against a CA."

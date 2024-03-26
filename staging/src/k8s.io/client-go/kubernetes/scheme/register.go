@@ -71,6 +71,8 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
+// 功能包括： 序列化 反序列化 内部版本和api版本转换 默认函数
+// 组、版本和类型信息和 go 类型，以及字符串名称之间进行映射等
 var Scheme = runtime.NewScheme()
 var Codecs = serializer.NewCodecFactory(Scheme)
 var ParameterCodec = runtime.NewParameterCodec(Scheme)

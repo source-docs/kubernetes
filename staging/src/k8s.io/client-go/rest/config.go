@@ -336,6 +336,7 @@ func RESTClientFor(config *Config) (*RESTClient, error) {
 // between all the API Groups and Versions.
 // Note that the http client takes precedence over the transport values configured.
 // The http client defaults to the `http.DefaultClient` if nil.
+// 根据 Config 和 httpClient， 创建一个 RestClient
 func RESTClientForConfigAndClient(config *Config, httpClient *http.Client) (*RESTClient, error) {
 	if config.GroupVersion == nil {
 		return nil, fmt.Errorf("GroupVersion is required when initializing a RESTClient")
@@ -344,6 +345,8 @@ func RESTClientForConfigAndClient(config *Config, httpClient *http.Client) (*RES
 		return nil, fmt.Errorf("NegotiatedSerializer is required when initializing a RESTClient")
 	}
 
+	// 根据配置，生成 baseURL 和 根据  api 版本，
+	// versionedAPIPath 示例： /apis/admissionregistration.k8s.io/v1
 	baseURL, versionedAPIPath, err := defaultServerUrlFor(config)
 	if err != nil {
 		return nil, err
@@ -351,6 +354,7 @@ func RESTClientForConfigAndClient(config *Config, httpClient *http.Client) (*RES
 
 	rateLimiter := config.RateLimiter
 	if rateLimiter == nil {
+		// 如果 rateLimiter 未设置，，会根据配置的 qps burst 或者默认值创建一个 rateLimiter
 		qps := config.QPS
 		if config.QPS == 0.0 {
 			qps = DefaultQPS
@@ -496,6 +500,7 @@ func buildUserAgent(command, version, os, arch, commit string) string {
 }
 
 // DefaultKubernetesUserAgent returns a User-Agent string built from static global vars.
+// 根据系统信息和运行命令以及版本信息生成一个 UserAgent
 func DefaultKubernetesUserAgent() string {
 	return buildUserAgent(
 		adjustCommand(os.Args[0]),

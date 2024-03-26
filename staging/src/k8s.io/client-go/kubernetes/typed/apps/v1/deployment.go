@@ -121,6 +121,7 @@ func (c *deployments) Watch(ctx context.Context, opts metav1.ListOptions) (watch
 }
 
 // Create takes the representation of a deployment and creates it.  Returns the server's representation of the deployment, and an error, if there is any.
+// 创建 Deployment
 func (c *deployments) Create(ctx context.Context, deployment *v1.Deployment, opts metav1.CreateOptions) (result *v1.Deployment, err error) {
 	result = &v1.Deployment{}
 	err = c.client.Post().

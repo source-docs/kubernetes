@@ -415,10 +415,12 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	configShallowCopy := *c
 
 	if configShallowCopy.UserAgent == "" {
+		// 设置默认 UserAgent
 		configShallowCopy.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
 
 	// share the transport between all clients
+	// 根据配置创建 http 连接， 可能会自定义配置很多 transport 的配置
 	httpClient, err := rest.HTTPClientFor(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -434,12 +436,16 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset, error) {
 	configShallowCopy := *c
 	if configShallowCopy.RateLimiter == nil && configShallowCopy.QPS > 0 {
+		// 如果 RateLimiter 没有配置，但是 qps 大于 0
 		if configShallowCopy.Burst <= 0 {
+			// 短期 爆发 操作的数量, 设置了 QPS 后，要求大于0
 			return nil, fmt.Errorf("burst is required to be greater than 0 when RateLimiter is not set and QPS is set to greater than 0")
 		}
+		// 根据 QPS 和 Burst 创建 RateLimiter
 		configShallowCopy.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(configShallowCopy.QPS, configShallowCopy.Burst)
 	}
 
+	// 使用同一个配置和 httpClient 初始化各个版本的 client
 	var cs Clientset
 	var err error
 	cs.admissionregistrationV1, err = admissionregistrationv1.NewForConfigAndClient(&configShallowCopy, httpClient)
@@ -623,6 +629,7 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 		return nil, err
 	}
 
+	// 创建一个用于在 api-server 中发现支持的资源的 DiscoveryClient
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
 		return nil, err

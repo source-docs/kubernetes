@@ -38,6 +38,7 @@ const (
 )
 
 // Interface captures the set of operations for generically interacting with Kubernetes REST apis.
+// 与 Kubernetes REST apis 进行交互的 client 交互操作集
 type Interface interface {
 	GetRateLimiter() flowcontrol.RateLimiter
 	Verb(verb string) *Request
@@ -105,6 +106,7 @@ type RESTClient struct {
 
 // NewRESTClient creates a new RESTClient. This client performs generic REST functions
 // such as Get, Put, Post, and Delete on specified paths.
+// 创建一个 RESTClient
 func NewRESTClient(baseURL *url.URL, versionedAPIPath string, config ClientContentConfig, rateLimiter flowcontrol.RateLimiter, client *http.Client) (*RESTClient, error) {
 	if len(config.ContentType) == 0 {
 		config.ContentType = "application/json"

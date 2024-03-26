@@ -43,44 +43,61 @@ import (
 //
 // Schemes are not expected to change at runtime and are only threadsafe after
 // registration is complete.
+// 功能包括： 序列化 反序列化 内部版本和api版本转换 默认函数
+// 组、版本和类型信息和 go 类型，以及字符串名称之间进行映射等
 type Scheme struct {
 	// gvkToType allows one to figure out the go type of an object with
 	// the given version and name.
+	// 组、版本和类型映射到其对应的 Go 类型
 	gvkToType map[schema.GroupVersionKind]reflect.Type
 
 	// typeToGVK allows one to find metadata for a given go object.
 	// The reflect.Type we index by should *not* be a pointer.
+	// Go 类型映射到 组、版本和类型
 	typeToGVK map[reflect.Type][]schema.GroupVersionKind
 
 	// unversionedTypes are transformed without conversion in ConvertToVersion.
+	// Go 类型映射可以在任何组或版本上下文中创建的未版本化类型的名称
 	unversionedTypes map[reflect.Type]schema.GroupVersionKind
 
 	// unversionedKinds are the names of kinds that can be created in the context of any group
 	// or version
 	// TODO: resolve the status of unversioned types.
+	// 将字符串类型的资源类型映射到未版本化反射类型 reflect.Type 的映射。
 	unversionedKinds map[string]reflect.Type
 
 	// Map from version and resource to the corresponding func to convert
 	// resource field labels in that version to internal version.
+	// 将 schema.GroupVersionKind 映射到 FieldLabelConversionFunc 函数的映射。
+	// 用于将指定版本的资源字段标签转换为内部版本。
 	fieldLabelConversionFuncs map[schema.GroupVersionKind]FieldLabelConversionFunc
 
 	// defaulterFuncs is a map to funcs to be called with an object to provide defaulting
 	// the provided object must be a pointer.
+	// 将反射类型 reflect.Type 映射到 func(interface{}) 函数的映射。用于在提供的对象上提供默认值
 	defaulterFuncs map[reflect.Type]func(interface{})
 
 	// converter stores all registered conversion functions. It also has
 	// default converting behavior.
+	// 用于存储所有注册的转换函数的 conversion.Converter 对象。
+	// 它还具有默认的转换行为，
+	// 可用于执行对象之间的转换。
 	converter *conversion.Converter
 
 	// versionPriority is a map of groups to ordered lists of versions for those groups indicating the
 	// default priorities of these versions as registered in the scheme
+	// 将组映射到版本顺序列表的映射，
+	// 表示注册在 Scheme 中的这些版本的默认优先级。
 	versionPriority map[string][]string
 
 	// observedVersions keeps track of the order we've seen versions during type registration
+	// 按顺序记录我们在类型注册过程中看到的版本的列表。
 	observedVersions []schema.GroupVersion
 
 	// schemeName is the name of this scheme.  If you don't specify a name, the stack of the NewScheme caller will be used.
 	// This is useful for error reporting to indicate the origin of the scheme.
+	// Scheme 的名称，用于标识该 Scheme。
+	// 如果未指定名称，则将使用 NewScheme 调用者的堆栈信息作为名称。
 	schemeName string
 }
 
