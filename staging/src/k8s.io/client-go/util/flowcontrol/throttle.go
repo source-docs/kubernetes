@@ -39,12 +39,17 @@ type PassiveRateLimiter interface {
 type RateLimiter interface {
 	PassiveRateLimiter
 	// Accept returns once a token becomes available.
+	// 阻塞直到一个令牌可用。
 	Accept()
 	// Wait returns nil if a token is taken before the Context is done.
+	// 等待直到获取一个令牌，或者上下文被取消
 	Wait(ctx context.Context) error
 }
 
 type tokenBucketPassiveRateLimiter struct {
+	// limiter 通过令牌桶实现的限速器
+	// r：每 s 向令牌桶里面添加多少令牌
+	// b: 令牌桶的容量
 	limiter *rate.Limiter
 	qps     float32
 	clock   clock.PassiveClock
@@ -117,17 +122,26 @@ func (tbprl *tokenBucketPassiveRateLimiter) QPS() float32 {
 	return tbprl.qps
 }
 
+// TryAccept 尝试获取一个令牌，如果获取不到，返回 false
 func (tbprl *tokenBucketPassiveRateLimiter) TryAccept() bool {
+	// limiter.AllowN: 尝试消费 n 个令牌
+	// 如果令牌数量小于 n, 返回 false
 	return tbprl.limiter.AllowN(tbprl.clock.Now(), 1)
 }
 
 // Accept will block until a token becomes available
+// 阻塞直到一个令牌可用。
 func (tbrl *tokenBucketRateLimiter) Accept() {
 	now := tbrl.clock.Now()
+	// limiter.ReserveN DelayFrom:  预留 n 个令牌，并且 DelayFrom 返回需要等待的时间
+	// 可以选择不等待，调用 Cancel，会将预留的令牌归还
 	tbrl.clock.Sleep(tbrl.limiter.ReserveN(now, 1).DelayFrom(now))
 }
 
+// Wait 等待直到获取一个令牌，或者上下文被取消
 func (tbrl *tokenBucketRateLimiter) Wait(ctx context.Context) error {
+	// limiter.Wait: 消费一个令牌
+	// 如果令牌不足，会阻塞直到拿到令牌
 	return tbrl.limiter.Wait(ctx)
 }
 

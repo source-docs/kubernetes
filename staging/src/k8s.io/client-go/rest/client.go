@@ -169,7 +169,8 @@ func readExpBackoffConfig() BackoffManager {
 //	Do()
 //
 // if err != nil { ... }
-// list, ok := resp.(*api.PodList)
+// list, ok := resp.(*
+// 请求的 HTTP 方法
 func (c *RESTClient) Verb(verb string) *Request {
 	return NewRequest(c).Verb(verb)
 }

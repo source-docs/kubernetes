@@ -597,6 +597,7 @@ func (r Request) finalURLTemplate() url.URL {
 	return *u
 }
 
+// tryThrottleWithInfo 请求限流
 func (r *Request) tryThrottleWithInfo(ctx context.Context, retryInfo string) error {
 	if r.rateLimiter == nil {
 		return nil
@@ -604,6 +605,7 @@ func (r *Request) tryThrottleWithInfo(ctx context.Context, retryInfo string) err
 
 	now := time.Now()
 
+	// 等待直到获取一个令牌，或者上下文被取消
 	err := r.rateLimiter.Wait(ctx)
 	if err != nil {
 		err = fmt.Errorf("client rate limiter Wait returned an error: %w", err)
@@ -619,11 +621,13 @@ func (r *Request) tryThrottleWithInfo(ctx context.Context, retryInfo string) err
 	}
 
 	if latency > longThrottleLatency {
+		// 等待超过50 ms, 打印日志
 		klog.V(3).Info(message)
 	}
 	if latency > extraLongThrottleLatency {
 		// If the rate limiter latency is very high, the log message should be printed at a higher log level,
 		// but we use a throttled logger to prevent spamming.
+		// 等待时间太长，打印更高级别日志
 		globalThrottledLogger.Infof("%s", message)
 	}
 	metrics.RateLimiterLatency.Observe(ctx, r.verb, r.finalURLTemplate(), latency)
@@ -875,6 +879,7 @@ func (r *Request) Stream(ctx context.Context) (io.ReadCloser, error) {
 // second mistake is, when under the same circumstances, the programmer tries
 // to GET, PUT or DELETE a named resource(resourceName != ""), again, if
 // namespaceSet is true then namespace must not be empty.
+// 对 Request 的参数进行校验
 func (r *Request) requestPreflightCheck() error {
 	if !r.namespaceSet {
 		return nil
@@ -921,6 +926,7 @@ func (r *Request) newHTTPRequest(ctx context.Context) (*http.Request, error) {
 // received. It handles retry behavior and up front validation of requests. It will invoke
 // fn at most once. It will return an error if a problem occurred prior to connecting to the
 // server - the provided function is responsible for handling server errors.
+// 发起请求，并且在服务端返回后回调 fn
 func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Response)) error {
 	//Metrics for total request latency
 	start := time.Now()
@@ -933,6 +939,7 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 		return r.err
 	}
 
+	// 参数校验
 	if err := r.requestPreflightCheck(); err != nil {
 		return err
 	}
@@ -945,6 +952,8 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 	// Throttle the first try before setting up the timeout configured on the
 	// client. We don't want a throttled client to return timeouts to callers
 	// before it makes a single request.
+	// 进行限流
+	// 在设置 timeout 之前进行，防止因为限流等待而超时
 	if err := r.tryThrottle(ctx); err != nil {
 		return err
 	}
@@ -955,14 +964,17 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 		defer cancel()
 	}
 
+	// 判断失败的时候要不要重试
 	isErrRetryableFunc := func(req *http.Request, err error) bool {
 		// "Connection reset by peer" or "apiserver is shutting down" are usually a transient errors.
 		// Thus in case of "GET" operations, we simply retry it.
 		// We are not automatically retrying "write" operations, as they are not idempotent.
+		// 非 GET 请求，通常不幂等，不重试
 		if req.Method != "GET" {
 			return false
 		}
 		// For connection errors and apiserver shutdown errors retry.
+		// 如果是 ConnectionReset 或者是 错误是连接终止造成的
 		if net.IsConnectionReset(err) || net.IsProbableEOF(err) {
 			return true
 		}
@@ -972,6 +984,7 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 	// Right now we make about ten retry attempts if we get a Retry-After response.
 	retry := r.retryFn(r.maxRetries)
 	for {
+		// 在请求之前调用，返回错误需要中止，并且可以在重试的时候重置 Request
 		if err := retry.Before(ctx, r); err != nil {
 			return retry.WrapPreviousError(err)
 		}
@@ -986,23 +999,29 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 		if req.ContentLength >= 0 && !(req.Body != nil && req.ContentLength == 0) {
 			metrics.RequestSize.Observe(ctx, r.verb, r.URL().Host, float64(req.ContentLength))
 		}
+		// 每次重试后更新重试间隔
 		retry.After(ctx, r, resp, err)
 
+		// 判断是否请求完成
 		done := func() bool {
 			defer readAndCloseResponseBody(resp)
 
 			// if the the server returns an error in err, the response will be nil.
 			f := func(req *http.Request, resp *http.Response) {
 				if resp == nil {
+					// 失败了，resp 没拿到，不回调
 					return
 				}
+				// 回调传入的函数
 				fn(req, resp)
 			}
 
 			if retry.IsNextRetry(ctx, r, req, resp, err, isErrRetryableFunc) {
+				// 确定是否需要进行下一次重试。
 				return false
 			}
 
+			// 不需要重试了
 			f(req, resp)
 			return true
 		}()
@@ -1021,6 +1040,7 @@ func (r *Request) request(ctx context.Context, fn func(*http.Request, *http.Resp
 func (r *Request) Do(ctx context.Context) Result {
 	var result Result
 	err := r.request(ctx, func(req *http.Request, resp *http.Response) {
+		// 服务端返回后回调，每次重试都会回调
 		result = r.transformResponse(resp, req)
 	})
 	if err != nil {
@@ -1052,14 +1072,17 @@ func (r *Request) DoRaw(ctx context.Context) ([]byte, error) {
 }
 
 // transformResponse converts an API response into a structured API object
+// transformResponse response 转换
 func (r *Request) transformResponse(resp *http.Response, req *http.Request) Result {
 	var body []byte
 	if resp.Body != nil {
+		// body 不空，尝试读取
 		data, err := ioutil.ReadAll(resp.Body)
 		switch err.(type) {
 		case nil:
 			body = data
 		case http2.StreamError:
+			// HTTP2 场景下，服务端发送了部分 body 后，关闭了连接
 			// This is trying to catch the scenario that the server may close the connection when sending the
 			// response body. This can be caused by server timeout due to a slow network connection.
 			// TODO: Add test for this. Steps may be:
@@ -1091,10 +1114,12 @@ func (r *Request) transformResponse(resp *http.Response, req *http.Request) Resu
 	}
 	if len(contentType) > 0 {
 		var err error
+		// 根据 contentType 解析资源类型
 		mediaType, params, err := mime.ParseMediaType(contentType)
 		if err != nil {
 			return Result{err: errors.NewInternalError(err)}
 		}
+		// 根据 mediaType 等匹配解码器
 		decoder, err = r.c.content.Negotiator.Decoder(mediaType, params)
 		if err != nil {
 			// if we fail to negotiate a decoder, treat this as an unstructured error
@@ -1247,6 +1272,7 @@ func isTextResponse(resp *http.Response) bool {
 
 // retryAfterSeconds returns the value of the Retry-After header and true, or 0 and false if
 // the header was missing or not a valid number.
+// 读取服务端传递的 Retry-After 头，确定要过多久重试
 func retryAfterSeconds(resp *http.Response) (int, bool) {
 	if h := resp.Header.Get("Retry-After"); len(h) > 0 {
 		if i, err := strconv.Atoi(h); err == nil {
@@ -1322,6 +1348,7 @@ func (r Result) Into(obj runtime.Object) error {
 			r.statusCode, r.contentType)
 	}
 
+	// 将 body 解码到 对象
 	out, _, err := r.decoder.Decode(r.body, nil, obj)
 	if err != nil || out == obj {
 		return err

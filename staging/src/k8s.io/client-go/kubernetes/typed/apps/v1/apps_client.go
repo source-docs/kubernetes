@@ -26,16 +26,19 @@ import (
 	rest "k8s.io/client-go/rest"
 )
 
+// AppsV1Interface
 type AppsV1Interface interface {
 	RESTClient() rest.Interface
 	ControllerRevisionsGetter
 	DaemonSetsGetter
+	// 用来创建对 Deployments 进行操作的接口实例
 	DeploymentsGetter
 	ReplicaSetsGetter
 	StatefulSetsGetter
 }
 
 // AppsV1Client is used to interact with features provided by the apps group.
+// /apis/v1 下的资源
 type AppsV1Client struct {
 	restClient rest.Interface
 }

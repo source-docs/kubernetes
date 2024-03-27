@@ -76,6 +76,7 @@ func IsTimeout(err error) bool {
 // connection closure errors (strongly correlated) and callers that need to
 // differentiate probable errors in connection behavior between normal "this is
 // disconnected" should use the method.
+// 判断错误是否是连接终止造成的
 func IsProbableEOF(err error) bool {
 	if err == nil {
 		return false

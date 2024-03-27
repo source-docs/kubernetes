@@ -69,6 +69,7 @@ type WithRetry interface {
 	// err: the server sent this error to us, if err is set then resp is nil.
 	// f: a IsRetryableErrorFunc function provided by the client that determines
 	//    if the err sent by the server is retryable.
+	// 确定是否需要进行下一次重试。
 	IsNextRetry(ctx context.Context, restReq *Request, httpReq *http.Request, resp *http.Response, err error, f IsRetryableErrorFunc) bool
 
 	// Before should be invoked prior to each attempt, including
@@ -78,9 +79,11 @@ type WithRetry interface {
 	// Before may also be additionally responsible for preparing
 	// the request for the next retry, namely in terms of resetting
 	// the request body in case it has been read.
+	// 在请求之前调用，返回错误需要中止，并且可以在重试的时候重置 Request
 	Before(ctx context.Context, r *Request) error
 
 	// After should be invoked immediately after an attempt is made.
+	// 每次重试后更新重试间隔
 	After(ctx context.Context, r *Request, resp *http.Response, err error)
 
 	// WrapPreviousError wraps the error from any previous attempt into

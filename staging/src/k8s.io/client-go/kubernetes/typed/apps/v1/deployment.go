@@ -42,6 +42,7 @@ type DeploymentsGetter interface {
 }
 
 // DeploymentInterface has methods to work with Deployment resources.
+// 对 Deployment 进行操作的接口
 type DeploymentInterface interface {
 	Create(ctx context.Context, deployment *v1.Deployment, opts metav1.CreateOptions) (*v1.Deployment, error)
 	Update(ctx context.Context, deployment *v1.Deployment, opts metav1.UpdateOptions) (*v1.Deployment, error)
