@@ -88,6 +88,7 @@ func Forever(f func(), period time.Duration) {
 // Until is syntactic sugar on top of JitterUntil with zero jitter factor and
 // with sliding = true (which means the timer for period starts after the f
 // completes).
+// 每隔一段时间运行一次 f, 直到 stopCh 被关闭
 func Until(f func(), period time.Duration, stopCh <-chan struct{}) {
 	JitterUntil(f, period, 0.0, true, stopCh)
 }
@@ -296,6 +297,7 @@ func (b *Backoff) Step() time.Duration {
 // is called or when the parent channel is closed, whichever happens first.
 //
 // Note the caller must *always* call the CancelFunc, otherwise resources may be leaked.
+// 一旦 parentCh 关闭， ctx 就会被取消
 func contextForChannel(parentCh <-chan struct{}) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 

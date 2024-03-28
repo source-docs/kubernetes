@@ -340,6 +340,11 @@ func NewInformer(
 //     or you stop the controller).
 //   - h is the object you want notifications sent to.
 //   - indexers is the indexer for the received object type.
+//
+// lw: 实际执行 list watch 的组件
+// objType: 希望被监听的对象
+// h: 事件处理回调
+// indexers: 存储事件对象
 func NewIndexerInformer(
 	lw ListerWatcher,
 	objType runtime.Object,
@@ -442,6 +447,8 @@ func processDeltas(
 //     or you stop the controller).
 //   - h is the object you want notifications sent to.
 //   - clientState is the store you want to populate
+//
+// 填充存储并提供事件通知
 func newInformer(
 	lw ListerWatcher,
 	objType runtime.Object,

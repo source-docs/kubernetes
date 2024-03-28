@@ -263,9 +263,12 @@ func WaitForNamedCacheSync(controllerName string, stopCh <-chan struct{}, cacheS
 // WaitForCacheSync waits for caches to populate.  It returns true if it was successful, false
 // if the controller should shutdown
 // callers should prefer WaitForNamedCacheSync()
+// 等待缓存填充, 成功返回 true， 失败返回 false
+// stopCh: 停止通道
 func WaitForCacheSync(stopCh <-chan struct{}, cacheSyncs ...InformerSynced) bool {
 	err := wait.PollImmediateUntil(syncedPollPeriod,
 		func() (bool, error) {
+			// 轮询检测所有的 InformerSynced，全部返回 true 才算成功
 			for _, syncFunc := range cacheSyncs {
 				if !syncFunc() {
 					return false, nil

@@ -54,6 +54,7 @@ type WatchFunc func(options metav1.ListOptions) (watch.Interface, error)
 // ListWatch knows how to list and watch a set of apiserver resources.  It satisfies the ListerWatcher interface.
 // It is a convenience function for users of NewReflector, etc.
 // ListFunc and WatchFunc must not be nil
+// 集成了 list 和 watch 功能
 type ListWatch struct {
 	ListFunc  ListFunc
 	WatchFunc WatchFunc
@@ -67,6 +68,7 @@ type Getter interface {
 }
 
 // NewListWatchFromClient creates a new ListWatch from the specified client, resource, namespace and field selector.
+// 创建 listWatch client
 func NewListWatchFromClient(c Getter, resource string, namespace string, fieldSelector fields.Selector) *ListWatch {
 	optionsModifier := func(options *metav1.ListOptions) {
 		options.FieldSelector = fieldSelector.String()

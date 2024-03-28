@@ -50,15 +50,18 @@ func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer,
 	}
 }
 
+// 处理一个事件
 func (c *Controller) processNextItem() bool {
 	// Wait until there is a new item in the working queue
 	key, quit := c.queue.Get()
 	if quit {
+		// 队列关闭了
 		return false
 	}
 	// Tell the queue that we are done with processing this key. This unblocks the key for other workers
 	// This allows safe parallel processing because two pods with the same key are never processed in
 	// parallel.
+	// 向队列提交当前 key 已经处理完成
 	defer c.queue.Done(key)
 
 	// Invoke the method containing the business logic
@@ -123,9 +126,11 @@ func (c *Controller) Run(workers int, stopCh chan struct{}) {
 	defer c.queue.ShutDown()
 	klog.Info("Starting Pod controller")
 
+	// informer 开始监听
 	go c.informer.Run(stopCh)
 
 	// Wait for all involved caches to be synced, before processing items from the queue is started
+	// 等待缓存同步完成
 	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
 		return
@@ -139,7 +144,9 @@ func (c *Controller) Run(workers int, stopCh chan struct{}) {
 	klog.Info("Stopping Pod controller")
 }
 
+// 退出的话，每隔 1s 运行一次
 func (c *Controller) runWorker() {
+	// 一直处理，除非队列关闭了
 	for c.processNextItem() {
 	}
 }
@@ -174,8 +181,11 @@ func main() {
 	// whenever the cache is updated, the pod key is added to the workqueue.
 	// Note that when we finally process the item from the workqueue, we might see a newer version
 	// of the Pod than the version which was responsible for triggering the update.
+	// 整体：将缓存的变更同步到工作队列
+	//
 	indexer, informer := cache.NewIndexerInformer(podListWatcher, &v1.Pod{}, 0, cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj interface{}) { // 监听到有新的对象被添加到缓存时，添加到工作队列
+			// 生成 key, 后续处理的时候可以通过这个 key 从 indexer 里面取出来（indexer.GetByKey(key)）
 			key, err := cache.MetaNamespaceKeyFunc(obj)
 			if err == nil {
 				queue.Add(key)

@@ -17,6 +17,8 @@ limitations under the License.
 package workqueue
 
 // RateLimitingInterface is an interface that rate limits items being added to the queue.
+//
+//	带限速和排队功能的队列
 type RateLimitingInterface interface {
 	DelayingInterface
 
@@ -36,6 +38,7 @@ type RateLimitingInterface interface {
 // Remember to call Forget!  If you don't, you may end up tracking failures forever.
 // NewRateLimitingQueue does not emit metrics. For use with a MetricsProvider, please use
 // NewNamedRateLimitingQueue instead.
+// 带限速和排队功能的队列
 func NewRateLimitingQueue(rateLimiter RateLimiter) RateLimitingInterface {
 	return &rateLimitingType{
 		DelayingInterface: NewDelayingQueue(),
