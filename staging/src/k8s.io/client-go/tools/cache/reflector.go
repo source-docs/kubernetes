@@ -46,6 +46,7 @@ import (
 const defaultExpectedTypeName = "<unspecified>"
 
 // Reflector watches a specified resource and causes all changes to be reflected in the given store.
+// 从 api-server 获取全局信息和监听增量事件，将资源的变更事件写入 DeltaFIFO 队列
 type Reflector struct {
 	// name identifies this reflector. By default it will be a file:line if possible.
 	name string
@@ -59,12 +60,15 @@ type Reflector struct {
 	// Only the type needs to be right, except that when that is
 	// `unstructured.Unstructured` the object's `"apiVersion"` and
 	// `"kind"` must also be right.
+	// 需要监听类型的示例对象的一个反射值
 	expectedType reflect.Type
 	// The GVK of the object we expect to place in the store if unstructured.
 	expectedGVK *schema.GroupVersionKind
 	// The destination to sync up with the watch source
+	// 存储时间变更的 Store，这里是 DeltaFIFO 队列
 	store Store
 	// listerWatcher is used to perform lists and watches.
+	// 实际和 api-server 交互，执行 list watcher 的组件
 	listerWatcher ListerWatcher
 
 	// backoff manages backoff of ListWatch
@@ -72,10 +76,13 @@ type Reflector struct {
 	// initConnBackoffManager manages backoff the initial connection with the Watch call of ListAndWatch.
 	initConnBackoffManager wait.BackoffManager
 
+	// 重新同步的时间间隔
 	resyncPeriod time.Duration
 	// ShouldResync is invoked periodically and whenever it returns `true` the Store's Resync operation is invoked
+	// 通过该方法定期判断是否应该重新同步队列, 如果返回 true， 会调用 Store 的 Resync 方法
 	ShouldResync func() bool
 	// clock allows tests to manipulate time
+	// 时间相关操作，主要用于单元测试
 	clock clock.Clock
 	// paginatedResult defines whether pagination should be forced for list calls.
 	// It is set based on the result of the initial list call.
@@ -86,6 +93,7 @@ type Reflector struct {
 	lastSyncResourceVersion string
 	// isLastSyncResourceVersionUnavailable is true if the previous list or watch request with
 	// lastSyncResourceVersion failed with an "expired" or "too large resource version" error.
+	// 是否最后一次同步的资源版本号不可用
 	isLastSyncResourceVersionUnavailable bool
 	// lastSyncResourceVersionMutex guards read/write access to lastSyncResourceVersion
 	lastSyncResourceVersionMutex sync.RWMutex
@@ -96,8 +104,10 @@ type Reflector struct {
 	// NOTE: It should be used carefully as paginated lists are always served directly from
 	// etcd, which is significantly less efficient and may lead to serious performance and
 	// scalability problems.
+	// 请求初始和重新同步的观察列表的分块大小
 	WatchListPageSize int64
 	// Called whenever the ListAndWatch drops the connection with an error.
+	// Watch 失败处理器
 	watchErrorHandler WatchErrorHandler
 }
 
@@ -123,14 +133,17 @@ type ResourceVersionUpdater interface {
 type WatchErrorHandler func(r *Reflector, err error)
 
 // DefaultWatchErrorHandler is the default implementation of WatchErrorHandler
+// 默认的 Watch 失败处理器
 func DefaultWatchErrorHandler(r *Reflector, err error) {
 	switch {
 	case isExpiredError(err):
 		// Don't set LastSyncResourceVersionUnavailable - LIST call with ResourceVersion=RV already
 		// has a semantic that it returns data at least as fresh as provided RV.
 		// So first try to LIST with setting RV to resource version of last observed object.
+		// Watch 的时候，出现 资源版本 RV 过期问题，先记录日志忽略
 		klog.V(4).Infof("%s: watch of %v closed with: %v", r.name, r.expectedTypeName, err)
 	case err == io.EOF:
+		// 这种情况是 Watch 正常停止
 		// watch closed normally
 	case err == io.ErrUnexpectedEOF:
 		klog.V(1).Infof("%s: Watch for %v closed with unexpected EOF: %v", r.name, r.expectedTypeName, err)
@@ -163,11 +176,20 @@ func NewNamespaceKeyedIndexerAndReflector(lw ListerWatcher, expectedType interfa
 // "yes".  This enables you to use reflectors to periodically process
 // everything as well as incrementally processing the things that
 // change.
+// NewReflector 创建一个  Reflector
+// lw: 从 client 里面抽象出来的，用来实际和 api-server 进行 list watch 的组件
+// expectedType: 需要监听资源的类型
+// store: 存储时间变更的 Store，这里是 DeltaFIFO 队列
+// resyncPeriod: 重新同步的时间间隔
 func NewReflector(lw ListerWatcher, expectedType interface{}, store Store, resyncPeriod time.Duration) *Reflector {
 	return NewNamedReflector(naming.GetNameFromCallsite(internalPackages...), lw, expectedType, store, resyncPeriod)
 }
 
 // NewNamedReflector same as NewReflector, but with a specified name for logging
+// lw: 从 client 里面抽象出来的，用来实际和 api-server 进行 list watch 的组件
+// expectedType: 需要监听资源的类型
+// store: 存储时间变更的 Store，这里是 DeltaFIFO 队列
+// resyncPeriod: 重新同步的时间间隔
 func NewNamedReflector(name string, lw ListerWatcher, expectedType interface{}, store Store, resyncPeriod time.Duration) *Reflector {
 	realClock := &clock.RealClock{}
 	r := &Reflector{
@@ -177,6 +199,7 @@ func NewNamedReflector(name string, lw ListerWatcher, expectedType interface{}, 
 		// We used to make the call every 1sec (1 QPS), the goal here is to achieve ~98% traffic reduction when
 		// API server is not healthy. With these parameters, backoff will stop at [30,60) sec interval which is
 		// 0.22 QPS. If we don't backoff for 2min, assume API server is healthy and we reset the backoff.
+		//
 		backoffManager:         wait.NewExponentialBackoffManager(800*time.Millisecond, 30*time.Second, 2*time.Minute, 2.0, 1.0, realClock),
 		initConnBackoffManager: wait.NewExponentialBackoffManager(800*time.Millisecond, 30*time.Second, 2*time.Minute, 2.0, 1.0, realClock),
 		resyncPeriod:           resyncPeriod,
@@ -187,17 +210,21 @@ func NewNamedReflector(name string, lw ListerWatcher, expectedType interface{}, 
 	return r
 }
 
+// 设置 Reflector 要监听的资源 类型
 func (r *Reflector) setExpectedType(expectedType interface{}) {
 	r.expectedType = reflect.TypeOf(expectedType)
 	if r.expectedType == nil {
+		// 默认类型
 		r.expectedTypeName = defaultExpectedTypeName
 		return
 	}
 
+	// 默认是反射类型的字符串形式
 	r.expectedTypeName = r.expectedType.String()
 
 	if obj, ok := expectedType.(*unstructured.Unstructured); ok {
 		// Use gvk to check that watch event objects are of the desired type.
+		// 如果是 Unstructured 类型，用来处理没有在Golang结构中注册的对象的类型
 		gvk := obj.GroupVersionKind()
 		if gvk.Empty() {
 			klog.V(4).Infof("Reflector from %s configured with expectedType of *unstructured.Unstructured with empty GroupVersionKind.", r.name)
@@ -215,6 +242,7 @@ var internalPackages = []string{"client-go/tools/cache/"}
 // Run repeatedly uses the reflector's ListAndWatch to fetch all the
 // objects and subsequent deltas.
 // Run will exit when stopCh is closed.
+// 启动 Reflector，
 func (r *Reflector) Run(stopCh <-chan struct{}) {
 	klog.V(3).Infof("Starting reflector %s (%s) from %s", r.expectedTypeName, r.resyncPeriod, r.name)
 	wait.BackoffUntil(func() {
@@ -251,6 +279,8 @@ func (r *Reflector) resyncChan() (<-chan time.Time, func() bool) {
 // ListAndWatch first lists all items and get the resource version at the moment of call,
 // and then use the resource version to watch.
 // It returns error if ListAndWatch didn't even try to initialize watch.
+// 该方法会被 Reflector 循环调用，
+// 首先列出所有项目，然后使用 rv watch
 func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	klog.V(3).Infof("Listing and watching %v from %s", r.expectedTypeName, r.name)
 	var resourceVersion string
@@ -556,11 +586,13 @@ func (r *Reflector) setLastSyncResourceVersion(v string) {
 // versions no older than has already been observed in relist results or watch events, or, if the last relist resulted
 // in an HTTP 410 (Gone) status code, returns "" so that the relist will use the latest resource version available in
 // etcd via a quorum read.
+// 用于确定应该从哪个 rv 进行 list 或 relist
 func (r *Reflector) relistResourceVersion() string {
 	r.lastSyncResourceVersionMutex.RLock()
 	defer r.lastSyncResourceVersionMutex.RUnlock()
 
 	if r.isLastSyncResourceVersionUnavailable {
+		// 最后一次同步的资源版本号不可用, 使用 ""
 		// Since this reflector makes paginated list requests, and all paginated list requests skip the watch cache
 		// if the lastSyncResourceVersion is unavailable, we set ResourceVersion="" and list again to re-establish reflector
 		// to the latest available ResourceVersion, using a consistent read from etcd.
@@ -569,6 +601,7 @@ func (r *Reflector) relistResourceVersion() string {
 	if r.lastSyncResourceVersion == "" {
 		// For performance reasons, initial list performed by reflector uses "0" as resource version to allow it to
 		// be served from the watch cache if it is enabled.
+		// 初始状态使用 "0" 作为 rv
 		return "0"
 	}
 	return r.lastSyncResourceVersion

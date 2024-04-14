@@ -27,6 +27,7 @@ import (
 
 // GetNameFromCallsite walks back through the call stack until we find a caller from outside of the ignoredPackages
 // it returns back a shortpath/filename:line to aid in identification of this reflector when it starts logging
+// 遍历调用栈，找到开始调用 ignoredPackages 的地方，生成一个 文件加行号的字符串，用来识别 reflector
 func GetNameFromCallsite(ignoredPackages ...string) string {
 	name := "????"
 	const maxStack = 10

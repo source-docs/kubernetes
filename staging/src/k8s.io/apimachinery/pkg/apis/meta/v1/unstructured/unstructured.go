@@ -38,6 +38,7 @@ import (
 // TODO: make the serialization part of this type distinct from the field accessors.
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:deepcopy-gen=true
+// 用于处理没有在Golang结构中注册的对象的类型
 type Unstructured struct {
 	// Object is a JSON compatible map with string, float, int, bool, []interface{}, or
 	// map[string]interface{}

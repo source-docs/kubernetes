@@ -95,10 +95,11 @@ var ErrorHandlers = []func(error){
 	}).OnError,
 }
 
-// HandlerError is a method to invoke when a non-user facing piece of code cannot
+// HandleError is a method to invoke when a non-user facing piece of code cannot
 // return an error and needs to indicate it has been ignored. Invoking this method
 // is preferable to logging the error - the default behavior is to log but the
 // errors may be sent to a remote server for analysis.
+// 非用户界面的代码返回了错误，会调用该方法，默认行为是打一下日志
 func HandleError(err error) {
 	// this is sometimes called with a nil error.  We probably shouldn't fail and should do nothing instead
 	if err == nil {

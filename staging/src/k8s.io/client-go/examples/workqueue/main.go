@@ -53,6 +53,7 @@ func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer,
 // 处理一个事件
 func (c *Controller) processNextItem() bool {
 	// Wait until there is a new item in the working queue
+	// 从队列里面取一个事件
 	key, quit := c.queue.Get()
 	if quit {
 		// 队列关闭了
@@ -65,8 +66,10 @@ func (c *Controller) processNextItem() bool {
 	defer c.queue.Done(key)
 
 	// Invoke the method containing the business logic
+	// 业务逻辑
 	err := c.syncToStdout(key.(string))
 	// Handle the error if something went wrong during the execution of the business logic
+	// 错误处理，失败会重新入队
 	c.handleErr(err, key)
 	return true
 }
@@ -74,7 +77,10 @@ func (c *Controller) processNextItem() bool {
 // syncToStdout is the business logic of the controller. In this controller it simply prints
 // information about the pod to stdout. In case an error happened, it has to simply return the error.
 // The retry logic should not be part of the business logic.
+// 业务逻辑
+// 重试已经在上一层处理，这一层不用关心重试
 func (c *Controller) syncToStdout(key string) error {
+	// 根据 key 从 index 里面拿到真实对象
 	obj, exists, err := c.indexer.GetByKey(key)
 	if err != nil {
 		klog.Errorf("Fetching object with key %s from store failed with %v", key, err)
@@ -98,16 +104,19 @@ func (c *Controller) handleErr(err error, key interface{}) {
 		// Forget about the #AddRateLimited history of the key on every successful synchronization.
 		// This ensures that future processing of updates for this key is not delayed because of
 		// an outdated error history.
+		// 成功后从队列移除
 		c.queue.Forget(key)
 		return
 	}
 
 	// This controller retries 5 times if something goes wrong. After that, it stops trying.
+	// 如果重试没有达到 5 次，重新入队列
 	if c.queue.NumRequeues(key) < 5 {
 		klog.Infof("Error syncing pod %v: %v", key, err)
 
 		// Re-enqueue the key rate limited. Based on the rate limiter on the
 		// queue and the re-enqueue history, the key will be processed later again.
+		// 重新进队列，后续重新处理
 		c.queue.AddRateLimited(key)
 		return
 	}

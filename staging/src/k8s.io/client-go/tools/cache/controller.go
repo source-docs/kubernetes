@@ -41,12 +41,15 @@ type Config struct {
 	// The queue for your objects - has to be a DeltaFIFO due to
 	// assumptions in the implementation. Your Process() function
 	// should accept the output of this Queue's Pop() method.
+	// DeltaFIFO 队列
 	Queue
 
 	// Something that can list and watch your objects.
+	// 实际和 api-server 交互，执行 list watcher 的组件
 	ListerWatcher
 
 	// Something that can process a popped Deltas.
+	// 处理队列中弹出的东西
 	Process ProcessFunc
 
 	// ObjectType is an example object of the type this controller is
@@ -56,12 +59,14 @@ type Config struct {
 	ObjectType runtime.Object
 
 	// FullResyncPeriod is the period at which ShouldResync is considered.
+	// 资源重新同步间隔
 	FullResyncPeriod time.Duration
 
 	// ShouldResync is periodically used by the reflector to determine
 	// whether to Resync the Queue. If ShouldResync is `nil` or
 	// returns true, it means the reflector should proceed with the
 	// resync.
+	// reflector 会通过该方法定期判断是否应该重新同步队列
 	ShouldResync ShouldResyncFunc
 
 	// If true, when Process() returns an error, re-enqueue the object.
@@ -69,9 +74,11 @@ type Config struct {
 	//       the object completely if desired. Pass the object in
 	//       question to this interface as a parameter.  This is probably moot
 	//       now that this functionality appears at a higher level.
+	// 是否在调用 Process 接口失败的时候，重新提交队列重试
 	RetryOnError bool
 
 	// Called whenever the ListAndWatch drops the connection with an error.
+	// Watch 失败处理器
 	WatchErrorHandler WatchErrorHandler
 
 	// WatchListPageSize is the requested chunk size of initial and relist watch lists.
@@ -88,10 +95,13 @@ type ProcessFunc func(obj interface{}) error
 
 // `*controller` implements Controller
 type controller struct {
-	config         Config
-	reflector      *Reflector
+	config Config
+	// 从 api-server 获取全局信息和监听增量事件，将资源的变更事件写入 DeltaFIFO 队列
+	reflector *Reflector
+	// 保护 reflector 的缩
 	reflectorMutex sync.RWMutex
-	clock          clock.Clock
+	// 时间相关操作，主要用于单元测试
+	clock clock.Clock
 }
 
 // Controller is a low-level controller that is parameterized by a
@@ -125,12 +135,15 @@ func New(c *Config) Controller {
 // Run begins processing items, and will continue until a value is sent down stopCh or it is closed.
 // It's an error to call Run more than once.
 // Run blocks; call via go.
+// Run 开始处理事件， 会一直处理知道 stopCh 发送一个值或者被关闭
+// 调用 Run 会阻塞，应该通过 go 的方式创建协程调用
 func (c *controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	go func() {
 		<-stopCh
 		c.config.Queue.Close()
 	}()
+	// 创建一个 Reflector， 用来从 api-server 获取全局信息和监听增量事件，将资源的变更事件写入 DeltaFIFO 队列
 	r := NewReflector(
 		c.config.ListerWatcher,
 		c.config.ObjectType,
@@ -150,6 +163,7 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 
 	var wg wait.Group
 
+	// 开始运行 Reflector
 	wg.StartWithChannel(stopCh, r.Run)
 
 	wait.Until(c.processLoop, time.Second, stopCh)
@@ -179,6 +193,7 @@ func (c *controller) LastSyncResourceVersion() string {
 // actually exit when the controller is stopped. Or just give up on this stuff
 // ever being stoppable. Converting this whole package to use Context would
 // also be helpful.
+// 处理变更队列的循环，目前是单线程处理
 func (c *controller) processLoop() {
 	for {
 		obj, err := c.config.Queue.Pop(PopProcessFunc(c.config.Process))
@@ -210,6 +225,9 @@ func (c *controller) processLoop() {
 //     it will get an object of type DeletedFinalStateUnknown. This can
 //     happen if the watch is closed and misses the delete event and we don't
 //     notice the deletion until the subsequent re-list.
+//
+// 处理一个资源变更事件，只用于通知，不能返回错误
+// 实现的时候事件是单协程触发，所以这些方法里面不能有耗时阻塞操作，防止阻塞全部事件通知
 type ResourceEventHandler interface {
 	OnAdd(obj interface{})
 	OnUpdate(oldObj, newObj interface{})
@@ -292,6 +310,7 @@ func (r FilteringResourceEventHandler) OnDelete(obj interface{}) {
 // DeletionHandlingMetaNamespaceKeyFunc checks for
 // DeletedFinalStateUnknown objects before calling
 // MetaNamespaceKeyFunc.
+// 如果是 DeletedFinalStateUnknown 类型，会直接使用 Key 属性， 如果不是，会调用 MetaNamespaceKeyFunc
 func DeletionHandlingMetaNamespaceKeyFunc(obj interface{}) (string, error) {
 	if d, ok := obj.(DeletedFinalStateUnknown); ok {
 		return d.Key, nil
@@ -341,8 +360,9 @@ func NewInformer(
 //   - h is the object you want notifications sent to.
 //   - indexers is the indexer for the received object type.
 //
-// lw: 实际执行 list watch 的组件
+// lw: 实际执行 list watch 的组件，通过 client 和 apiserver 交互
 // objType: 希望被监听的对象
+// resyncPeriod: 如果非 0， 就算对象没变更，也会触发 OnUpdate
 // h: 事件处理回调
 // indexers: 存储事件对象
 func NewIndexerInformer(
@@ -401,6 +421,9 @@ func NewTransformingIndexerInformer(
 
 // Multiplexes updates in the form of a list of Deltas into a Store, and informs
 // a given handler of events OnUpdate, OnAdd, OnDelete
+// 处理 增量队列里面的变化事件
+// clientState 是存储对象的索引
+// deltas 是变更详情
 func processDeltas(
 	// Object which receives event notifications from the given deltas
 	handler ResourceEventHandler,
@@ -408,26 +431,36 @@ func processDeltas(
 	deltas Deltas,
 ) error {
 	// from oldest to newest
+	// 某一个对象从老到新的全部变化
 	for _, d := range deltas {
 		obj := d.Object
 
 		switch d.Type {
+		// 同步，替换，新增，修改
 		case Sync, Replaced, Added, Updated:
+			// 从 存储里面读取对象
 			if old, exists, err := clientState.Get(obj); err == nil && exists {
+				// 如果对象已存在，更新对象
 				if err := clientState.Update(obj); err != nil {
 					return err
 				}
+				// 调用 OnUpdate
 				handler.OnUpdate(old, obj)
 			} else {
+				// 如果对象不存在， 新增到存储里面
 				if err := clientState.Add(obj); err != nil {
 					return err
 				}
+				// 调用 OnAdd
 				handler.OnAdd(obj)
 			}
-		case Deleted:
+
+		case Deleted: // 删除事件处理
+			// 从 index 里面删除对象
 			if err := clientState.Delete(obj); err != nil {
 				return err
 			}
+			// 调用 OnDelete
 			handler.OnDelete(obj)
 		}
 	}
@@ -449,6 +482,10 @@ func processDeltas(
 //   - clientState is the store you want to populate
 //
 // 填充存储并提供事件通知
+// objType: 希望被监听的对象
+// resyncPeriod: 如果非 0， 就算对象没变更，也会触发 OnUpdate
+// h: 事件处理回调
+// clientState: 既 index, 存储真实对象
 func newInformer(
 	lw ListerWatcher,
 	objType runtime.Object,
@@ -460,6 +497,7 @@ func newInformer(
 	// This will hold incoming changes. Note how we pass clientState in as a
 	// KeyLister, that way resync operations will result in the correct set
 	// of update/delete deltas.
+	// 通过 clientState 存储和对比资源的增量变化，
 	fifo := NewDeltaFIFOWithOptions(DeltaFIFOOptions{
 		KnownObjects:          clientState,
 		EmitDeltaTypeReplaced: true,
@@ -474,7 +512,9 @@ func newInformer(
 		RetryOnError:     false,
 
 		Process: func(obj interface{}) error {
+			// 处理增量变更队列中弹出的东西
 			if deltas, ok := obj.(Deltas); ok {
+				// 处理增量变更
 				return processDeltas(h, clientState, deltas)
 			}
 			return errors.New("object given as Process argument is not Deltas")

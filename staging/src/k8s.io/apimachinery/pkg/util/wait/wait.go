@@ -53,6 +53,7 @@ func (g *Group) Wait() {
 
 // StartWithChannel starts f in a new goroutine in the group.
 // stopCh is passed to f as an argument. f should stop when stopCh is available.
+// 用一个 goroutine 运行给定的方法，并且传递一个 stopCh
 func (g *Group) StartWithChannel(stopCh <-chan struct{}, f func(stopCh <-chan struct{})) {
 	g.Start(func() {
 		f(stopCh)
@@ -140,6 +141,7 @@ func JitterUntil(f func(), period time.Duration, jitterFactor float64, sliding b
 //
 // If sliding is true, the period is computed after f runs. If it is false then
 // period includes the runtime for f.
+// 循环执行 f, 间隔由 BackoffManager 决定，并且在 stopCh 关闭的时候退出
 func BackoffUntil(f func(), backoff BackoffManager, sliding bool, stopCh <-chan struct{}) {
 	var t clock.Timer
 	for {
@@ -332,6 +334,7 @@ type exponentialBackoffManagerImpl struct {
 // NewExponentialBackoffManager returns a manager for managing exponential backoff. Each backoff is jittered and
 // backoff will not exceed the given max. If the backoff is not called within resetDuration, the backoff is reset.
 // This backoff manager is used to reduce load during upstream unhealthiness.
+// 指数退避策略管理器
 func NewExponentialBackoffManager(initBackoff, maxBackoff, resetDuration time.Duration, backoffFactor, jitter float64, c clock.Clock) BackoffManager {
 	return &exponentialBackoffManagerImpl{
 		backoff: &Backoff{

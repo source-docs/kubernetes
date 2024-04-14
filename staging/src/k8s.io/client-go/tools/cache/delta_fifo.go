@@ -191,6 +191,7 @@ type Delta struct {
 
 // Deltas is a list of one or more 'Delta's to an individual object.
 // The oldest delta is at index 0, the newest delta is the last one.
+// 是一个单独对象的一个或者一系列变更，从老到新排列
 type Deltas []Delta
 
 // NewDeltaFIFO returns a Queue which can be used to process changes to items.
