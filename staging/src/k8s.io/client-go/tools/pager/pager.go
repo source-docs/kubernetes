@@ -35,6 +35,7 @@ const defaultPageBufferSize = 10
 type ListPageFunc func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error)
 
 // SimplePageFunc adapts a context-less list function into one that accepts a context.
+// 简单适配一下，将一个不带 ctx 的函数适配为带 ctx 的
 func SimplePageFunc(fn func(opts metav1.ListOptions) (runtime.Object, error)) ListPageFunc {
 	return func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
 		return fn(opts)
@@ -46,6 +47,7 @@ func SimplePageFunc(fn func(opts metav1.ListOptions) (runtime.Object, error)) Li
 // metav1.ListOptions that supports paging and return a list. The pager does
 // not alter the field or label selectors on the initial options list.
 type ListPager struct {
+	// list 的分块大小
 	PageSize int64
 	PageFn   ListPageFunc
 
