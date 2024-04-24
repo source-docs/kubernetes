@@ -42,6 +42,8 @@ type DeltaFIFOOptions struct {
 	// this queue "knows about". It is used to decide which items are missing
 	// when Replace() is called; 'Deleted' deltas are produced for the missing items.
 	// KnownObjects may be nil if you can tolerate missing deletions on Replace().
+	// 用来返回所有已知的 key, 这样在 Replace 的时候，就能知道哪些 key 之前存在，现在没了，是被删除了
+	// 传入的值一般为 indexer
 	KnownObjects KeyListerGetter
 
 	// EmitDeltaTypeReplaced indicates that the queue consumer
@@ -73,6 +75,15 @@ type DeltaFIFOOptions struct {
 // replace events for backwards compatibility.  Sync is used for periodic
 // resync events.
 //
+// DeltaFIFO 和 FIFO 相似，有两个地方不同：
+// 1. 与 key 关联的值不是 value, 而是 value 的多次变更，记录在一个 []Delta 里面。
+// 如果 Add 对象，就要在 []Delta 追加一个 Delta
+// 但是如果增加的是 Delete 事件，并且 []Delta 最后面也是一个 Delete, 这个时候不会追加
+// 如果最后一个元素是 DeletedFinalStateUnknown 状态的话，会替换旧的
+// 2. DeltaFIFO 有两个额外的添加对象的方式，Replaced 和 Sync。
+// 如果 EmitDeltaTypeReplaced 没有设置为 true，替换事件里面会使用 Sync, 设置 true 的话，使用 Replaced。
+// Sync 被用于定期同步事件
+//
 // DeltaFIFO is a producer-consumer queue, where a Reflector is
 // intended to be the producer, and the consumer is whatever calls
 // the Pop() method.
@@ -100,30 +111,40 @@ type DeltaFIFOOptions struct {
 // different versions of the same object.
 type DeltaFIFO struct {
 	// lock/cond protects access to 'items' and 'queue'.
+	// lock 和 cond 保护对 item 和 queue 的访问
 	lock sync.RWMutex
 	cond sync.Cond
 
 	// `items` maps a key to a Deltas.
 	// Each such Deltas has at least one Delta.
+	// key 到 Deltas 的 map,
+	// 每一个 Deltas 里面至少有一个 Delta
 	items map[string]Deltas
 
 	// `queue` maintains FIFO order of keys for consumption in Pop().
 	// There are no duplicates in `queue`.
 	// A key is in `queue` if and only if it is in `items`.
+	// queue 维护通过 Pop 消费 key 的 FIFO 顺序
+	// queue 里面不会有重复
+	// 如果一个 key 在 queue 里面，那他也在 items 里面
 	queue []string
 
 	// populated is true if the first batch of items inserted by Replace() has been populated
 	// or Delete/Add/Update/AddIfNotPresent was called first.
+	// 是否填充数据，当第一次调用 Replace 或者 Delete/Add/Update/AddIfNotPresent， 都会变为 true, 用于判断是否同步完成
 	populated bool
 	// initialPopulationCount is the number of items inserted by the first call of Replace()
+	// 第一次调用 Replace 插入的对象数量
 	initialPopulationCount int
 
 	// keyFunc is used to make the key used for queued item
 	// insertion and retrieval, and should be deterministic.
+	// 为对象生成一个 key, 用来插入和检索，生成的 key 应该是确定的
 	keyFunc KeyFunc
 
 	// knownObjects list keys that are "known" --- affecting Delete(),
 	// Replace(), and Resync()
+	// 用来返回所有已知的 key, 这样在 Replace 的时候，就能知道哪些 key 之前存在，现在没了，是被删除了
 	knownObjects KeyListerGetter
 
 	// Used to indicate a queue is closed so a control loop can exit when a queue is empty.
@@ -169,12 +190,16 @@ const (
 	Deleted DeltaType = "Deleted"
 	// Replaced is emitted when we encountered watch errors and had to do a
 	// relist. We don't know if the replaced object has changed.
+	// 当我们遇到 watch 错误，不得不重新 list 时，会触发 Replace, 我们不知道被替换的对象是否发生了变化。
 	//
 	// NOTE: Previous versions of DeltaFIFO would use Sync for Replace events
 	// as well. Hence, Replaced is only emitted when the option
 	// EmitDeltaTypeReplaced is true.
+	// 以前版本的 DeltaFIFO 会在 Replace 的情况下使用 Sync， Replaced 只有在
+	// EmitDeltaTypeReplaced 选项为 true，的时候才会触发
 	Replaced DeltaType = "Replaced"
 	// Sync is for synthetic events during a periodic resync.
+	// Sync 是针对周期同步期间的合成事件
 	Sync DeltaType = "Sync"
 )
 
